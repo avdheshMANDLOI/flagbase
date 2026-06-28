@@ -1,0 +1,60 @@
+# FlagBase Docker Compose Configuration
+# Spins up the API, PostgreSQL, and Redis for local development
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: flagbase-db
+    environment:
+      POSTGRES_USER: flagbase
+      POSTGRES_PASSWORD: flagbase
+      POSTGRES_DB: flagbase
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flagbase -d flagbase"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: flagbase-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: ./flagbase-backend
+      dockerfile: Dockerfile
+    container_name: flagbase-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./flagbase-backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://flagbase:flagbase@db:5432/flagbase
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./flagbase-backend/app:/app/app
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
